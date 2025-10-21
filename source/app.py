@@ -30,14 +30,49 @@ class App(QApplication):
     def __init__(self,
                  redirect_stdout: Union[StringIO, TextIOWrapper],
                  redirect_stderr: Union[StringIO, TextIOWrapper],
-                 argv,
-                 local_test=True,
-                 rov_ip="localhost",
-                 float_ip="localhost",
-                 video_feed_count=2):
+                 argv):
+        try:
+            with open("ui_config.json", "r") as f:
+                self.ui_config = json.load(f)
+        except FileNotFoundError:
+            print("No ui_config.json file", file=sys.__stderr__)
+            exit(1)
+        except json.decoder.JSONDecodeError:
+            print("Malformed ui_config.json file", file=sys.__stderr__)
+            exit(1)
+        try:
+            local_test = self.ui_config["local_test"]
+        except KeyError:
+            print("ui_config.json doesn't specify `local_test` parameter - Defaulting to `False`", file=sys.__stderr__)
+            local_test = True
+
+        try:
+            rov_ip = self.ui_config["rov_ip"]
+        except KeyError:
+            print("ui_config.json doesn't specify `rov_ip` parameter - Defaulting to `localhost`", file=sys.__stderr__)
+            rov_ip = "localhost"
+
+        try:
+            float_ip = self.ui_config["float_ip"]
+        except KeyError:
+            print("ui_config.json doesn't specify `float_ip` parameter - Defaulting to `localhost`", file=sys.__stderr__)
+            float_ip = "localhost"
+
+        try:
+            self.feed_config = self.ui_config["camera_data"]
+        except KeyError:
+            print("Couldn't find 'camera_data' in ui_config.json", file=sys.__stderr__)
+            self.feed_config = []
+
+        try:
+            self.port_bindings = self.ui_config["port_bindings"]
+        except KeyError:
+            print("Couldn't find 'port_bindings' in ui_config.json", file=sys.__stderr__)
+            exit(1)
+
         self.setStyle("Fusion")
 
-        self.video_feed_count = video_feed_count
+        self.video_feed_count = len(self.feed_config)
 
         self.redirect_stdout = redirect_stdout
         self.redirect_stderr = redirect_stderr
@@ -52,78 +87,52 @@ class App(QApplication):
             self.ROV_IP = rov_ip
             self.FLOAT_IP = float_ip
 
-        try:
-            with open("feed_config.json", "r") as f:
-                self.feed_config = json.load(f)
-            for i in range(self.video_feed_count):
-                if str(i) not in self.feed_config:
-                    print(f"No config settings for feed {i}", file=sys.__stderr__)
+        for conf in self.feed_config:
+            if conf["type"] == "fisheye":
+                try:
+                    conf["calibration_data"] = np.load(conf["undistort_file"])
+
+                    for key in ["camera_matrix", "dist_coeffs", "new_camera_matrix", "roi"]:
+                        if key not in conf["calibration_data"]:
+                            raise KeyError()
+
+                    new_camera_matrix, _ = cv2.getOptimalNewCameraMatrix(
+                        conf["calibration_data"]["camera_matrix"],
+                        conf["calibration_data"]["dist_coeffs"],
+                        (conf["width"], conf["height"]), alpha=0
+                    )
+
+                    conf["map1"], conf["map2"] = cv2.initUndistortRectifyMap(
+                        conf["calibration_data"]["camera_matrix"],
+                        conf["calibration_data"]["dist_coeffs"],
+                        None,
+                        new_camera_matrix,
+                        (conf["width"], conf["height"]),
+                        cv2.CV_16SC2
+                    )
+
+                except FileNotFoundError:
+                    print(f"Path to Feed {i} Undistort File is Invalid: `{conf['undistort_file']}`", file=sys.__stderr__)
                     exit(1)
-                conf = self.feed_config[str(i)]
-                if conf["type"] == "fisheye":
-                    try:
-                        conf["calibration_data"] = np.load(conf["undistort_file"])
+                except KeyError:
+                    for key in ["undistort_file", "width", "height"]:
+                        if key not in conf:
+                            print(f"Fisheye camera feeds must have '{key}' parameter", file=sys.__stderr__)
+                    else:
+                        print("Malformed Undistort File Provided", file=sys.__stderr__)
+                    exit(1)
 
-                        for key in ["camera_matrix", "dist_coeffs", "new_camera_matrix", "roi"]:
-                            if key not in conf["calibration_data"]:
-                                raise KeyError()
-
-                        new_camera_matrix, _ = cv2.getOptimalNewCameraMatrix(
-                            conf["calibration_data"]["camera_matrix"],
-                            conf["calibration_data"]["dist_coeffs"],
-                            (conf["width"], conf["height"]), alpha=0
-                        )
-
-                        conf["map1"], conf["map2"] = cv2.initUndistortRectifyMap(
-                            conf["calibration_data"]["camera_matrix"],
-                            conf["calibration_data"]["dist_coeffs"],
-                            None,
-                            new_camera_matrix,
-                            (conf["width"], conf["height"]),
-                            cv2.CV_16SC2
-                        )
-
-                    except FileNotFoundError:
-                        print(f"Path to Feed {i} Undistort File is Invalid: `{conf['undistort_file']}`", file=sys.__stderr__)
-                        exit(1)
-                    except KeyError:
-                        for key in ["undistort_file", "width", "height"]:
-                            if key not in conf:
-                                print(f"Fisheye camera feeds must have '{key}' parameter", file=sys.__stderr__)
-                        else:
-                            print("Malformed Undistort File Provided", file=sys.__stderr__)
-                        exit(1)
-
-        except FileNotFoundError:
-            print("No feed_config.json file", file=sys.__stderr__)
-            exit(1)
-        except json.decoder.JSONDecodeError:
-            print("Malformed feed_config.json file", file=sys.__stderr__)
-            exit(1)
-
-        try:
-            with open("port_bindings.json", "r") as f:
-                self.port_bindings = json.load(f)
-            ports = []
-            for binding in ["data", "float_data", "stdout", "control", "power", "action"]:
-                if binding not in self.port_bindings:
-                    raise json.decoder.JSONDecodeError(f"File is missing port for {self.port_bindings}",
-                                                       "port_bindings.json", 0)
-                if self.port_bindings[binding] in ports:
-                    raise json.decoder.JSONDecodeError(f"Port {self.port_bindings[binding]} is bound to more than once",
-                                                       "port_bindings.json", 0)
-                ports.append(binding)
-            for i in range(self.video_feed_count):
-                key = f"feed_{i}"
-                if key not in self.port_bindings:
-                    raise json.decoder.JSONDecodeError(f"Port {self.port_bindings[binding]} is bound to more than once",
-                                                       "port_bindings.json", 0)
-        except FileNotFoundError:
-            print("No port_bindings.json file", file=sys.__stderr__)
-            exit(1)
-        except json.decoder.JSONDecodeError:
-            print("Malformed port_bindings.json file", file=sys.__stderr__)
-            exit(1)
+        ports = []
+        for binding in ["data", "float_data", "stdout", "control", "power", "action"]:
+            if binding not in self.port_bindings:
+                raise ValueError(f"File is missing port for {binding} in ui_config.json")
+            if self.port_bindings[binding] in ports:
+                raise ValueError(f"Port {self.port_bindings[binding]} is bound to more than once in ui_config.json")
+            ports.append(binding)
+        for i in range(self.video_feed_count):
+            key = f"feed_{i}"
+            if key not in self.port_bindings:
+                raise ValueError(f"Port {self.port_bindings[binding]} is bound to more than once in ui_config.json")
 
         super().__init__(argv)
         self.closing = False

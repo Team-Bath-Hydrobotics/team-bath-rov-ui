@@ -30,24 +30,19 @@ from app import App
 faulthandler.enable()
 
 DEBUG = False  # STDOUT will not be displayed in the UI when set to True.
-RUN_ROV_LOCALLY = False # Set this to true to create dummy processes for the ROV
-ROV_IP = "192.168.1.133"
-FLOAT_IP = "localhost"
-VIDEO_FEED_COUNT = 2
 
 try:
     with Profile() as profile:
         # Catch standard output
         if DEBUG:
-            app = App(sys.__stdout__, sys.__stderr__, sys.argv, RUN_ROV_LOCALLY, ROV_IP, FLOAT_IP)
+            app = App(sys.__stdout__, sys.__stderr__, sys.argv)
             exit_code = app.exec()
         else:
             stderr_io = io.StringIO()
             with redirect_stderr(stderr_io) as redirected_stderr:
                 stdout_io = io.StringIO()
                 with redirect_stdout(stdout_io) as redirected_stdout:
-                    app = App(redirected_stdout, redirected_stderr, sys.argv,
-                              RUN_ROV_LOCALLY, ROV_IP, FLOAT_IP, VIDEO_FEED_COUNT)
+                    app = App(redirected_stdout, redirected_stderr, sys.argv)
                     exit_code = app.exec()
                     print(exit_code, file=sys.__stderr__)
 

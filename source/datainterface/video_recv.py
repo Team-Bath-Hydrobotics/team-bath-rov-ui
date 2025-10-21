@@ -13,13 +13,13 @@ if TYPE_CHECKING:
     from app import App
 
 try:
-    with open("feed_config.json") as f:
+    with open("ui_config.json") as f:
         cam_config = json.load(f)
 except FileNotFoundError:
-    print("Could not find feed_config.json")
+    print("Could not find ui_config.json")
     exit(1)
 except json.decoder.JSONDecodeError:
-    print("Malformed feed_config.json file", file=sys.stderr)
+    print("Malformed ui_config.json file", file=sys.stderr)
     exit(1)
 
 

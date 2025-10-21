@@ -1,0 +1,28 @@
+{
+  "local_test": true,
+  "rov_ip": "192.168.1.133",
+  "ui_ip": "192.168.1.81",
+  "float_ip": "localhost",
+  "camera_data": [
+    {
+    "type": "stereo"
+    },
+    {
+      "type": "fisheye",
+      "undistort_file": "fisheye_calibration_data.npz",
+      "width": 1280,
+      "height": 720
+    }
+    ],
+  "port_bindings": {
+    "feed_0": 52524,
+    "feed_1": 52523,
+    "feed_2": 52522,
+    "data": 52525,
+    "float_data": 52625,
+    "stdout": 52535,
+    "control": 52526,
+    "power": 52528,
+    "action": 52527
+  }
+}

@@ -99,7 +99,7 @@ class DataInterface(QObject):
         cam_index_offset = 0
         for video_feed_index in range(self.video_feed_count):
             # Get the config data for this video feed
-            feed_config = self.app.feed_config[str(video_feed_index)]
+            feed_config = self.app.feed_config[video_feed_index]
             port = self.app.port_bindings[f"feed_{video_feed_index}"]
 
             # A stereo video feed will produce two camera frames
@@ -175,7 +175,7 @@ class DataInterface(QObject):
         return data
 
     def on_camera_feed_disconnect(self, cam: int, feed: int) -> None:
-        feed_config = self.app.feed_config[str(feed)]
+        feed_config = self.app.feed_config[feed]
 
         # Send disconnection signal to both camera frames if the video feed was providing stereo data
         if feed_config["type"] == "stereo":
@@ -246,7 +246,7 @@ class DataInterface(QObject):
 
         frame_h, frame_w, _ = frame.shape
 
-        feed_config = self.app.feed_config[str(feed)]
+        feed_config = self.app.feed_config[feed]
 
         if feed_config["type"] == "stereo":
             # Code for efficiently seperating video feed into the left and right cameras

@@ -1,0 +1,35 @@
+{
+  "ui_ip": "192.168.1.81",
+  "rov_ip": "192.168.1.133",
+  "local_test": false,
+  "controller_test": false,
+  "show_camera_stdout":true,
+  "camera_data": [
+	{
+		"type": "fisheye",
+		"width": 1280,
+		"height": 720,
+		"framerate": 24,
+		"bitrate": 2000000
+	},
+	{
+		"type": "stereo",
+		"width": 2560,
+		"height": 720,
+		"framerate": 24,
+		"bitrate": 2000000
+	}
+  ],
+  "port_bindings": {
+      "feed_0": 52524,
+      "feed_1": 52523,
+      "feed_2": 52522,
+      "data": 52525,
+      "float_data": 52625,
+      "stdout": 52535,
+      "control": 52526,
+      "power": 52528,
+      "action": 52527
+  }
+}
+
