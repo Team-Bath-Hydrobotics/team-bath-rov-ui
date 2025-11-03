@@ -2,7 +2,7 @@
   "ui_ip": "192.168.1.81",
   "rov_ip": "192.168.1.133",
   "local_test": false,
-  "controller_test": false,
+  "controller_test": true,
   "show_camera_stdout":true,
   "camera_data": [
 	{

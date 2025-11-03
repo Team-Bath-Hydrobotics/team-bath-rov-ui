@@ -413,8 +413,8 @@ class ROVInterface:
             if self.local_test:
                 if os.name == "nt":
                     process = (f'ffmpeg -fflags nobuffer -f dshow -i video="{camera_devices[i]}" '
-                               '-b:v 16M -preset ultrafast -tune zerolatency -g 30 '
-                               f' -r 30 -s 1920x1080 -preset fast -f mpegts udp://{addr}:{port}')
+                               '-b:v 2M -preset ultrafast -tune zerolatency'
+                               f' -r 24 -s 1920x1080 -f mpegts udp://{addr}:{port}')
 
                 elif os.name == "posix":
                     process = (f'ffmpeg -f avfoundation -i "{i}" -c:v libx264 '

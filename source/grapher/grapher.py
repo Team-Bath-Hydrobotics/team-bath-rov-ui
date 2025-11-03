@@ -10,19 +10,22 @@ from pathlib import Path
 import cv2
 import numpy as np
 import pandas as pd
-from PyQt6.QtCore import QThreadPool, QUrl, Qt, QSizeF, QTimer, QFileSystemWatcher, pyqtSignal
+from PyQt6.QtCore import QThreadPool, QUrl, Qt, QSizeF, QTimer, QFileSystemWatcher, pyqtSignal, QEvent
 from PyQt6.QtMultimediaWidgets import QGraphicsVideoItem
+from clickable_label import ClickableLabel
+
 
 from PyQt6.QtWidgets import QApplication, QVBoxLayout, QPushButton, QLineEdit, QMessageBox, QLabel, QTabWidget, \
     QFileDialog, QProgressBar, QTableWidget, QTableWidgetItem, QGraphicsView, QGraphicsScene, QFrame, QInputDialog, \
-    QCheckBox, QComboBox
-from PyQt6.QtGui import QIcon
+    QCheckBox, QComboBox, QWidget, QTextEdit, QSlider
+from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QImage
 from PyQt6.QtMultimedia import QMediaPlayer
 
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
 
 from grapher.graph_widget import GraphWidget
 from grapher.photo_sphere_viewer import PhotosphereViewer
+from grapher.stereo_depth_estimation import StereoVisionPipeline
 from multi_select_widget import MultiSelectWidget
 from rov_float_data_structures.float_data import FloatData
 from rov_float_data_structures.rov_data import ROVData
@@ -265,6 +268,142 @@ class Grapher(Window):
 
         self.photosphere_creation_complete.connect(self.photosphere_viewer.set_image_path)
 
+        # Distance Estimation
+
+        self.stereo_pipeline = StereoVisionPipeline()
+
+        self.LeftStereoImageContainer: QFrame = self.findChild(QFrame, "LeftStereoImageContainer")
+        self.LeftStereoImage = ClickableLabel(self.LeftStereoImageContainer)
+        self.LeftStereoImage.setScaledContents(True)
+        self.LeftStereoImageContainer.layout().addWidget(self.LeftStereoImage)
+
+        self.RightStereoImageContainer: QFrame = self.findChild(QFrame, "RightStereoImageContainer")
+        self.RightStereoImage = ClickableLabel(self.RightStereoImageContainer)
+        self.RightStereoImage.setScaledContents(True)
+        self.RightStereoImageContainer.layout().addWidget(self.RightStereoImage)
+
+        self.LeftStereoImage.clicked.connect(lambda x, y: self.stereo_pipeline.add_point(x, y))
+
+        self.DisparityMap: QLabel = self.findChild(QLabel, "DisparityMap")
+        self.stereo_pipeline.new_disparity_map.connect(
+            lambda: (
+                self.DisparityMap.setPixmap(QPixmap.fromImage(
+                    QImage(
+                        self.stereo_pipeline.disparity_map_display.tobytes(),
+                        self.stereo_pipeline.disparity_map_display.shape[1],
+                        self.stereo_pipeline.disparity_map_display.shape[0],
+                        QImage.Format.Format_Grayscale8
+                        )
+                ))
+                , print("New Disparity Map")
+            )
+        )
+
+        self.ResetPoints: QPushButton = self.findChild(QPushButton, "ResetStereoPoints")
+        self.ResetPoints.clicked.connect(lambda: (self.stereo_pipeline.reset_points(), self.draw_corresponding_points()))
+
+        self.stereo_pipeline.load_images("Stereo_Images/L_0.png", "Stereo_Images/R_0.png")
+        self.stereo_pipeline.corresponding_point_found.connect(self.draw_corresponding_points)
+        self.draw_corresponding_points()
+
+        self.FocalSlider: QSlider = self.findChild(QSlider, "FocalSlider")
+        self.FocalTextEdit: QLineEdit = self.findChild(QLineEdit, "FocalInput")
+
+        self.FocalTextEdit.textEdited.connect(
+            lambda text: (
+                self.FocalSlider.setValue(int(text)),
+                self.stereo_pipeline.__setattr__("focal_length", int(text))
+            ) if text.isnumeric()
+            else None
+
+        )
+        self.FocalSlider.valueChanged.connect(
+            lambda value: (
+                self.FocalTextEdit.setText(str(value)),
+                self.stereo_pipeline.__setattr__("focal_length", value)
+            )
+        )
+        self.FocalSlider.setValue(700)
+
+        self.BaselineSlider: QSlider = self.findChild(QSlider, "BaselineSlider")
+        self.BaselineTextEdit: QLineEdit = self.findChild(QLineEdit, "BaselineInput")
+
+        self.BaselineTextEdit.textEdited.connect(
+            lambda text: self.BaselineSlider.setValue(int(text)) if text.isnumeric()
+            else None
+
+        )
+        self.BaselineSlider.valueChanged.connect(
+            lambda value: (
+                self.BaselineTextEdit.setText(str(value)),
+                self.stereo_pipeline.__setattr__("baseline", value/1000)
+            )
+        )
+        self.BaselineSlider.setValue(100)
+
+        self.P1CorrespondingScore: QLabel = self.findChild(QLabel, "P1CorrespondingScore")
+        self.P1CorrespondingRating: QLabel = self.findChild(QLabel, "P1CorrespondingRating")
+        self.P1Disparity: QLabel = self.findChild(QLabel, "P1Disparity")
+        self.P13DPosition: QLabel = self.findChild(QLabel, "P13DPosition")
+
+        self.P2CorrespondingScore: QLabel = self.findChild(QLabel, "P2CorrespondingScore")
+        self.P2CorrespondingRating: QLabel = self.findChild(QLabel, "P2CorrespondingRating")
+        self.P2Disparity: QLabel = self.findChild(QLabel, "P2Disparity")
+        self.P23DPosition: QLabel = self.findChild(QLabel, "P23DPosition")
+
+        self.DistanceResult: QLabel = self.findChild(QLabel, "DistanceResult")
+
+        self.stereo_pipeline.new_result.connect(self.update_distance_estimation_results)
+
+
+    def update_distance_estimation_results(self):
+        r = self.stereo_pipeline.results
+
+        results = {
+            'distance_3d': None,
+            'point1_3d': None,
+            'point2_3d': None,
+            'depths': None,
+        }
+
+        self.P1CorrespondingScore.setText(
+        "N/A" if r["point1_confidence_score"] is None else f"{r['point1_confidence_score']:.3f}")
+        self.P1CorrespondingRating.setText(
+        "N/A" if r["point1_confidence_rating"] is None else r["point1_confidence_rating"]
+        )
+        self.P1Disparity.setText("N/A" if r["disparity"] is None else f"{r['disparity'][0]:.3f}")
+        self.P13DPosition.setText(
+            "N/A" if r["point1_3d"] is None else f"{','.join(['{a:.3f}' for a in r['point1_3d']])}")
+
+        self.P2CorrespondingScore.setText(
+            "N/A" if r["point2_confidence_score"] is None else f"{r['point2_confidence_score']:.3f}")
+        self.P2CorrespondingRating.setText(
+            "N/A" if r["point2_confidence_rating"] is None else r["point2_confidence_rating"]
+        )
+        self.P2Disparity.setText("N/A" if r["disparity"] is None else f"{r['disparity'][0]:.3f}")
+        self.P23DPosition.setText(
+            "N/A" if r["point2_3d"] is None else f"{','.join(['{a:.3f}' for a in r['point2_3d']])}")
+
+        self.DistanceResult.setText(f"{r['distance_3d']:.3f}")
+
+    def draw_corresponding_points(self):
+        for image, label, point_source in zip(
+                [self.stereo_pipeline.left_img, self.stereo_pipeline.right_img],
+                [self.LeftStereoImage, self.RightStereoImage],
+                [self.stereo_pipeline.selected_points, self.stereo_pipeline.corresponding_points]):
+
+            image = QImage(image.tobytes(), image.shape[1], image.shape[0], QImage.Format.Format_BGR888)
+            for i, (x, y), color in zip(range(2), point_source, self.stereo_pipeline.point_colors):
+
+                painter = QPainter(image)
+                painter.setPen(QColor(*color))
+                painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+                painter.drawEllipse(x-5, y-5, 10, 10)
+                painter.drawText(x+10, y+5, f"{i+1}")
+                painter.end()
+
+            label.setPixmap(QPixmap.fromImage(image))
+
     def load_photosphere(self):
         file, fltr = QFileDialog.getOpenFileName(
             self,
@@ -483,6 +622,7 @@ class Grapher(Window):
             image_height, image_width = img.shape[:2]
 
             focal_length = image_width / (2 * math.pi)
+
 
             warped = self.warp_to_equirectangular(
                 img,

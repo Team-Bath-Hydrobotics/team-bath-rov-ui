@@ -53,7 +53,6 @@ class VideoDisplay(QObject):
         self.on_disconnect.emit()
 
     def update_frame(self) -> None:
-
         if self.camera_feed is None:
             raise AttributeError("A Camera Feed Is Not Attached")
         # Wait until VideoFrame is free
