@@ -34,7 +34,7 @@ def init_gl(width, height):
 def sphere_viewer(image_path):
     pygame.init()
     screen = pygame.display.set_mode((1920, 1080), DOUBLEBUF | OPENGL)
-    pygame.display.set_caption("Photoshpere Viewer")
+    pygame.display.set_caption("Photosphere Viewer")
     init_gl(1920, 1080)
     texture = load_texture(image_path)
 

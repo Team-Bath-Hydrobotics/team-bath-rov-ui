@@ -31,6 +31,8 @@ faulthandler.enable()
 
 DEBUG = False  # STDOUT will not be displayed in the UI when set to True.
 
+print("Change!")
+
 try:
     with Profile() as profile:
         # Catch standard output
