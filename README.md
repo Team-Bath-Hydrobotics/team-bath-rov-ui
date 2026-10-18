@@ -1,4 +1,6 @@
-# Team Bath Hydrobotics ROV UI
+# [Deprecated] Team Bath Hydrobotics ROV UI
+
+This UI was built for the 2025 MATE ROV Competition and is not being worked on.
 
 ## Installation
 
